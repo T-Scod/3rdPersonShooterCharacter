@@ -1,7 +1,4 @@
-﻿using Cinemachine;
-using System.Collections;
-using UnityEngine;
-using UnityEngine.EventSystems;
+﻿using UnityEngine;
 
 /// <summary>
 /// Controls the player's movement, combat and health.
@@ -67,49 +64,55 @@ public class PlayerController : MonoBehaviour
             Debug.Break();
         }
 
-        // checks if the player is aiming
+        // checks if the player is now aiming
         if (Input.GetButtonDown("Aim"))
         {
             cameraSettings.aiming = true;
+
             // sets the animation to aiming
             m_anim.SetBool("Aim", true);
             m_anim.SetLayerWeight(1, 0.0f);
             m_anim.SetLayerWeight(2, 1.0f);
-            m_anim.SetLayerWeight(3, 0.0f);
-            combatSettings.crosshairObject.GetComponent<Animator>().SetTrigger("AimIn");
+            combatSettings.crosshairObject.GetComponent<Animator>().SetBool("Aim", true);
+
             // moves the player to the direction the camera is pointing
             transform.rotation = Quaternion.Euler(new Vector3(transform.localEulerAngles.x, cameraSettings.freeCamera.m_XAxis.Value, transform.localEulerAngles.z));
-            // transitions to the over the shoulder camera
+            cameraSettings.ResetPlayerRotation();
+
+            // transitions from the free camera to the over the shoulder camera
             cameraSettings.overShoulderCamera.gameObject.SetActive(true);
-            cameraSettings.overShoulderCamera.Follow = cameraSettings.overShoulderCamera.LookAt;
-            float yOffset = Utility.ProgressAsDecimal(cameraSettings.freeCamera.m_YAxis.Value, cameraSettings.xSensitivityOver, cameraSettings.ySensitivityOver);
-            //cameraSettings.SetCameraTargetYRotation(yOffset);
-            //cameraSettings.ResetPlayerRotation(transform.localEulerAngles.y);
+            cameraSettings.overShoulderCamera.m_XAxis.Value = cameraSettings.freeCamera.m_XAxis.Value;
+            cameraSettings.overShoulderCamera.m_YAxis.Value = cameraSettings.freeCamera.m_YAxis.Value;
             cameraSettings.freeCamera.gameObject.SetActive(false);
         }
         // checks if the player is no long aiming
         else if (Input.GetButtonUp("Aim"))
         {
             cameraSettings.aiming = false;
-            // sets the animation to not aiming
+
+            // sets the animation to not aiming if the player is not shooting
             if (combatSettings.combatState != PlayerCombat.CombatState.Shooting)
             {
                 m_anim.SetBool("Aim", false);
                 m_anim.SetLayerWeight(1, 1.0f);
                 m_anim.SetLayerWeight(2, 0.0f);
-                m_anim.SetLayerWeight(3, 0.0f);
             }
-            combatSettings.crosshairObject.GetComponent<Animator>().SetTrigger("AimOut");
-            // transitions to the free camera
+            else
+            {
+                cameraSettings.previousRot = transform.localRotation;
+            }
+            combatSettings.crosshairObject.GetComponent<Animator>().SetBool("Aim", false);
+
+            // transitions from the over the shoulder camera to the free camera
             cameraSettings.freeCamera.gameObject.SetActive(true);
-            cameraSettings.freeCamera.m_XAxis.Value = transform.localEulerAngles.y;
-            //cameraSettings.freeCamera.m_YAxis.Value = Utility.ProgressAsPercentage(cameraSettings.overShoulderCamera.GetCinemachineComponent<CinemachineTransposer>().m_FollowOffset.y, cameraSettings.xSensitivityOver, cameraSettings.ySensitivityOver);
-            cameraSettings.overShoulderCamera.Follow = null;
+            cameraSettings.freeCamera.m_XAxis.Value = cameraSettings.overShoulderCamera.m_XAxis.Value;
+            cameraSettings.freeCamera.m_YAxis.Value = cameraSettings.overShoulderCamera.m_YAxis.Value;
             cameraSettings.overShoulderCamera.gameObject.SetActive(false);
         }
 
-        // rotates the camera based on the player
+        // determines the current combat state
         combatSettings.ChargeShot();
+        // rotates the camera based on the player
         RotateView();
     }
 
@@ -149,6 +152,7 @@ public class PlayerController : MonoBehaviour
             {
                 desiredMove *= movementSettings.aimMultiplier;
             }
+            // applies the vector to the player as a force
             m_rigidBody.AddForce(desiredMove, ForceMode.Impulse);
         }
 
@@ -180,38 +184,6 @@ public class PlayerController : MonoBehaviour
             // rotate the rigidbody velocity to match the new direction that the character is looking
             Quaternion velRotation = Quaternion.AngleAxis(transform.eulerAngles.y - oldYRotation, Vector3.up);
             m_rigidBody.velocity = velRotation * m_rigidBody.velocity;
-        }
-    }
-
-    /// <summary>
-    /// Calculates the target along the ray.
-    /// </summary>
-    /// <param name="ray">The ray the target is being found on.</param>
-    /// <returns>Target along the ray.</returns>
-    private Vector3 GetTarget(Ray ray)
-    {
-        RaycastHit raycastHit;
-        // checks if it hit anything
-        if (Physics.Raycast(ray, out raycastHit))
-        {
-            // gets the point it hit
-            Vector3 target = raycastHit.point;
-            // ensures that bullets don't shoot backwards in certain situations
-            float targetToCam = Vector3.Distance(target, ray.origin);
-            float playerToCam = Vector3.Distance(transform.position, ray.origin);
-            // if it hit an ability then get the point further along the ray
-            if (raycastHit.collider.tag == "Ability" || playerToCam > targetToCam)
-            {
-                target = ray.GetPoint(1000.0f);
-            }
-            return target;
-        }
-        // the ray did not hit anything
-        else
-        {
-            // gets a point from the ray at a large distance away
-            Vector3 target = ray.GetPoint(1000.0f);
-            return target;
         }
     }
 }

@@ -16,30 +16,10 @@ public class PlayerCamera
     [Tooltip("The virtual camera that is able to look all around the player.")]
     public CinemachineFreeLook freeCamera;
     /// <summary>
-    /// Reference to the virtual camera that is locked to the player's shoulder.
+    /// Reference to the free camera that is locked to the player's shoulder.
     /// </summary>
     [Tooltip("The virtual camera that is locked to the player's shoulder.")]
     public CinemachineFreeLook overShoulderCamera;
-    /// <summary>
-    /// How sensitive the camera is to input on the x axis.
-    /// </summary>
-    [Tooltip("How sensitive the camera is to input on the X axis. (Rotation around the Y axis)")]
-    public float xSensitivityFree = 0.1f;
-    /// <summary>
-    /// How sensitive the camera is to input on the y axis.
-    /// </summary>
-    [Tooltip("How sensitive the camera is to input on the Y axis. (Rotation around the X axis)")]
-    public float ySensitivityFree = 0.1f;
-    /// <summary>
-    /// Minimum rotation around the X axis that the over the shoulder camera will be clamped to.
-    /// </summary>
-    [Tooltip("Minimum rotation around the X axis that the over the shoulder camera will be clamped to.")]
-    public float xSensitivityOver = -0.6f;
-    /// <summary>
-    /// Maximum rotation around the X axis that the over the shoulder camera will be clamped to.
-    /// </summary>
-    [Tooltip("Maximum rotation around the X axis that the over the shoulder camera will be clamped to.")]
-    public float ySensitivityOver = 1.0f;
     /// <summary>
     /// How quickly the player rotation moves towards the target rotation.
     /// </summary>
@@ -50,13 +30,17 @@ public class PlayerCamera
     /// </summary>
     [Tooltip("Determines if the cursor is locked.")]
     public bool lockCursor = true;
-    public float hipFireTime = 0.0f;
     #endregion
     /// <summary>
     /// Determines if the player is aiming.
     /// </summary>
     [HideInInspector]
     public bool aiming = false;
+    /// <summary>
+    /// The previous rotation of the model.
+    /// </summary>
+    [HideInInspector]
+    public Quaternion previousRot;
     #region Private
     /// <summary>
     /// Reference to the player.
@@ -70,10 +54,6 @@ public class PlayerCamera
     /// Determines if the cursor is locked.
     /// </summary>
     private bool m_cursorIsLocked = true;
-    /// <summary>
-    /// The rotation the player is rotating towards.
-    /// </summary>
-    private Quaternion m_playerTargetRot;
     #endregion
     #endregion
 
@@ -85,57 +65,71 @@ public class PlayerCamera
     {
         m_player = player;
         m_model = player.GetComponentInChildren<Animator>().transform;
-        m_playerTargetRot = m_player.localRotation;
+        previousRot = m_model.rotation;
     }
 
     /// <summary>
-    /// Calculates the
+    /// Calculates the direction the player and model should be facing.
     /// </summary>
     public void LookRotation()
     {
+        // checks if the player is not aiming
         if (!aiming)
         {
-            m_playerTargetRot = Quaternion.Euler(0.0f, freeCamera.m_XAxis.Value, 0.0f);
+            // smooths the player's rotation towards the rotation of the camera
+            m_player.localRotation = Quaternion.Slerp(m_player.localRotation, Quaternion.Euler(0.0f, freeCamera.m_XAxis.Value, 0.0f), smoothSpeed * Time.deltaTime);
 
-            Vector3 direction = m_player.GetComponent<Rigidbody>().velocity;
-            if (direction.sqrMagnitude > 3.2f)
+
+            if (m_player.GetComponent<PlayerController>().combatSettings.combatState == PlayerCombat.CombatState.Shooting)
             {
-                direction = Vector3.ProjectOnPlane(direction, Vector3.up);
-                direction.Normalize();
-                if (direction.x == 0.0f)
+                // sets the model's rotation to what it was in the previous frame
+                m_model.rotation = previousRot;
+            }
+            else
+            {
+                // gets the direction of the player's velocity
+                Vector3 direction = m_player.GetComponent<Rigidbody>().velocity;
+                // checks if the player is moving
+                if (direction.sqrMagnitude > 3.2f)
                 {
-                    direction.x += 0.001f;
-                }
+                    direction = Vector3.ProjectOnPlane(direction, Vector3.up);
+                    direction.Normalize();
+                    if (direction.x == 0.0f)
+                    {
+                        direction.x += 0.001f;
+                    }
 
-                m_model.localRotation = Quaternion.Slerp(m_model.localRotation, Quaternion.LookRotation(direction), smoothSpeed * Time.deltaTime);
+                    // rotates the model towards the direction they are moving and stores the current rotation
+                    m_model.rotation = Quaternion.Slerp(m_model.rotation, Quaternion.LookRotation(direction), smoothSpeed * Time.deltaTime);
+                    previousRot = m_model.rotation;
+                }
+                // the player is not moving
+                else
+                {
+                    // sets the model's rotation to what it was in the previous frame
+                    m_model.rotation = previousRot;
+                }
             }
         }
+        // the player is aiming
         else
         {
-            m_playerTargetRot = Quaternion.Euler(0.0f, overShoulderCamera.m_XAxis.Value, 0.0f);
+            // sets the player's rotation to the direction the camera is facing
+            m_player.localRotation = Quaternion.Euler(0.0f, overShoulderCamera.m_XAxis.Value, 0.0f);
         }
 
-        m_player.localRotation = Quaternion.Slerp(m_player.localRotation, m_playerTargetRot, smoothSpeed * Time.deltaTime);
         // updates whether the cursor is locked or not
         UpdateCursorLock();
     }
 
-    public void ResetPlayerModelRotation()
-    {
-        m_model.localRotation = Quaternion.identity;
-    }
-
+    /// <summary>
+    /// Resets the player to face towards the direction the camera is facing.
+    /// </summary>
     public void ResetPlayerRotation()
     {
-        if (aiming)
-        {
-            m_player.localRotation = Quaternion.Euler(0.0f, overShoulderCamera.m_XAxis.Value, 0.0f);
-        }
-        else
-        {
-            m_player.localRotation = Quaternion.Euler(0.0f, freeCamera.m_XAxis.Value, 0.0f);
-        }
-        m_playerTargetRot = m_player.localRotation;
+        m_player.localRotation = Quaternion.Euler(0.0f, overShoulderCamera.m_XAxis.Value, 0.0f);
+        m_model.localRotation = Quaternion.identity;
+        previousRot = Quaternion.identity;
     }
 
     /// <summary>

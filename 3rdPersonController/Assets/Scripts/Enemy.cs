@@ -9,50 +9,13 @@ public class Enemy : MonoBehaviour
     /// </summary>
     [Tooltip("Enemy health.")]
     public float health;
-    public Rigidbody disableObject;
     /// <summary>
-    /// How fast the enemy flashes red when damaged.
+    /// How fast the enemy flashes when damaged.
     /// </summary>
     [Tooltip("How fast the enemy flashes red when damaged.")]
     public float flashSpeed = 10.0f;
-    /// <summary>
-    /// Health drop prefab.
-    /// </summary>
-    [Tooltip("Health drop prefab.")]
-    public GameObject healthDrop;
-    /// <summary>
-    /// Chance of health pack dropping.
-    /// </summary>
-    [Tooltip("Chance of health pack dropping."), Range(0, 100)]
-    public float healthDropChance = 50.0f;
-    /// <summary>
-    /// Chance of player doing a voice line.
-    /// </summary>
-    [Tooltip("Chance of player doing a voice line."), Range(0, 100)]
-    public float voiceOverChance = 50.0f;
-    public GameObject explosionParticle;
-    public MeshRenderer[] meshes;
-    public float speakTimer = 20.0f;
-    #endregion
-    #region protected
-    /// <summary>
-    /// mkaing it possible to find player
-    /// </summary>
-    protected PlayerController m_player;
-    /// <summary>
-    /// setting the enemy to diable or not
-    /// </summary>
-    protected bool m_isDisabled;
-    /// <summary>
-    /// checking if the player is detected
-    /// </summary>
-    protected bool m_playerDetected;
     #endregion
     #region Private
-    /// <summary>
-    /// timer for how long to diable enemy for
-    /// </summary>
-    private float m_disableTime;
     /// <summary>
     /// Determines if the enemy got hit.
     /// </summary>
@@ -65,43 +28,30 @@ public class Enemy : MonoBehaviour
     /// Times how long the material has been flashing for.
     /// </summary>
     private float m_flashTimer = 0.0f;
-    private Color[] m_colours;
-    private float m_speakTimer;
-    #endregion
-    #region Audio
-    public AudioSource emp;
-    
+    /// <summary>
+    /// Reference to the mesh renderer so that the material can be accessed.
+    /// </summary>
+    private MeshRenderer m_meshRenderer;
     #endregion
     #endregion
 
-    // Start is called before the first frame update
-    protected void Start()
+    /// <summary>
+    /// Gets the mesh renderer component.
+    /// </summary>
+    private void Awake()
     {
-        m_player = FindObjectOfType<PlayerController>();
-        m_colours = new Color[meshes.Length];
-        for (int i = 0; i < meshes.Length; i++)
-        {
-            m_colours[i] = meshes[i].material.color;
-        }
-        m_speakTimer = speakTimer;
+        m_meshRenderer = GetComponent<MeshRenderer>();
     }
 
-    // Update is called once per frame
+    /// <summary>
+    /// Checks the health of the enemy and whether it is flashing.
+    /// </summary>
     protected void Update()
     {
-        m_speakTimer -= Time.deltaTime;
-        if (m_disableTime > 0)
-        {
-            m_disableTime -= Time.deltaTime;
-        }
-        else
-        {
-            Reboot();
-        }
-
+        // checks if the enemy has run out of health and should be destroyed.
         if (health <= 0)
         {
-            Death();
+            Destroy(gameObject, 0.3f);
         }
 
         // checks if the enemy was damaged
@@ -122,21 +72,15 @@ public class Enemy : MonoBehaviour
                 // changes the blue value of the colour
                 flashColour = new Color(1, value, value);
             }
-
-            foreach (var mesh in meshes)
-            {
-                mesh.material.color = flashColour;
-            }
+            // applies the colour to the enemy
+            m_meshRenderer.material.color = flashColour;
         }
-        
     }
 
-    public void SetDisableDuration(float duration)
-    {
-        m_disableTime = duration;
-        Disable();
-    }
-
+    /// <summary>
+    /// Decreases the enemy's health and flashes yellow.
+    /// </summary>
+    /// <param name="damage">Amount of damage taken.</param>
     public void TakeDamage(int damage)
     {
         // flashes the material and decrements the health
@@ -145,6 +89,10 @@ public class Enemy : MonoBehaviour
         health -= damage;
     }
 
+    /// <summary>
+    /// Decreases the enemy's health and flashes red.
+    /// </summary>
+    /// <param name="damage">Amount of damage taken.</param>
     public void TakeCriticalDamage(int damage)
     {
         // flashes the material and decrements the health
@@ -171,70 +119,5 @@ public class Enemy : MonoBehaviour
         }
 
         return value;
-    }
-
-    virtual protected void Death()
-    {
-        PlayExplosionEffect();
-        m_isDisabled = true;
-        DropHealthPack();
-        Destroy(gameObject);
-    }
-
-    protected void PlayExplosionEffect()
-    {
-        if (explosionParticle != null)
-        {
-            explosionParticle.transform.GetChild(0).gameObject.SetActive(true);
-            explosionParticle.transform.position = disableObject.position;
-            explosionParticle.transform.parent = null;
-            //explosionParticle.GetComponent<AudioSource>().Play();
-        }
-    }
-
-    virtual protected void Disable()
-    {
-        emp.Play();
-        m_isDisabled = true;
-        disableObject.isKinematic = false;
-    }
-
-    virtual protected void Reboot()
-    {
-        m_isDisabled = false;
-        disableObject.isKinematic = true;
-    }
-
-    /// <summary>
-    /// Pseudo randomly drops a health pack.
-    /// </summary>
-    protected void DropHealthPack()
-    {
-        // determines if a health pack is dropped
-        bool drop = false;
-
-        // 0% chance of dropping
-        if (healthDropChance <= 0.0f)
-        {
-            drop = false;
-        }
-        // 100% chance of dropping
-        else if (healthDropChance >= 100.0f)
-        {
-            drop = true;
-        }
-        else
-        {
-            // gets a random number between 0 and 100 inclusive
-            float prng = Random.Range(0.0f, 100.0f);
-            // applies the health drop chance and checks if the result is on the lower or higher end of the drop chance
-            drop = (prng <= 100.0f - healthDropChance) ? false : true;
-        }
-
-        if (drop)
-        {
-            // creates a health pack
-            Instantiate(healthDrop, disableObject.position, disableObject.rotation);
-        }
     }
 }
